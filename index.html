@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bebra</title>
+  <link rel="icon" href="apple.svg" type="image/svg+xml">
+
+  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Permissions-Policy" content="autoplay=(self)">
+</head>
+
+<body>
+
+  <!-- FULL BACKGROUND VIDEO (injected by script for iOS autoplay) -->
+  <div class="bg-video" id="bgVideoContainer"></div>
+
+  <!-- AUDIO (loop is fine; we will handle end/stop too) -->
+  <audio id="bgAudio" loop preload="auto" crossorigin="anonymous">
+    <source src="media/sextape.mp3" type="audio/mpeg">
+  </audio>
+
+  <!-- FLOWERS (video injected by script for iOS autoplay; wrapper hides native play button) -->
+  <section class="flowers-section" id="flowersVideoContainer">
+    <div class="flowers-video-wrap" aria-hidden="true"></div>
+  </section>
+
+  <!-- WAVE OVERLAY -->
+  <div class="wave-overlay" id="waveOverlay" aria-hidden="true">
+    <canvas id="waveCanvas"></canvas>
+  </div>
+
+  <!-- SINGLE PLAY BUTTON -->
+  <button class="wave-play" id="playWave" aria-label="Play">▶</button>
+
+  <!-- ENVELOPE -->
+  <section class="envelope-section">
+    <div class="envelope" onclick="openEmail()">
+      <div class="envelope-back"></div>
+      <div class="inbox-label">INBOX</div>
+      <div class="envelope-flap"></div>
+    </div>
+  </section>
+
+  <!-- PASSWORD WINDOW -->
+  <div class="pass-overlay" id="passOverlay">
+    <div class="pass-window" id="passWindow">
+      <div class="email-header">
+        <span class="email-title">
+          <span class="lock-icon" id="lockIcon" aria-hidden="true">🔒</span>
+          Locked
+        </span>
+        <button class="email-close" onclick="closePass()">✕</button>
+      </div>
+
+      <div class="pass-body">
+        <div class="pass-label">Enter password</div>
+
+        <input
+          id="passInput"
+          class="pass-input"
+          type="password"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          placeholder="••••••"
+          maxlength="6"
+        />
+
+        <div class="pass-error" id="passError" aria-live="polite"></div>
+      </div>
+
+      <div class="email-footer">
+        <button onclick="submitPass()">Unlock</button>
+        <span id="passHint" style="justify-self:center; color:#9AFF7A; font-size:13px; letter-spacing:1px;">
+          Protected
+        </span>
+        <button onclick="closePass()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMAIL WINDOW -->
+  <div class="email-overlay" id="emailOverlay">
+    <div class="email-window">
+      <div class="email-header">
+        <span class="email-title">Inbox</span>
+        <button class="email-close" onclick="closeEmail()">✕</button>
+      </div>
+
+      <div class="email-body" id="emailContent"></div>
+
+      <div class="email-footer">
+        <button onclick="prevPage()">◀ Prev</button>
+        <span id="pageIndicator">1 / 3</span>
+        <button onclick="nextPage()">Next ▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAIL IMAGE DISINTEGRATE -->
+  <div id="failGhost" class="fail-ghost" aria-hidden="true">
+    <canvas id="ghostCanvas"></canvas>
+  </div>
+
+<script>
+/* iOS: create videos in JS with muted/playsInline set before load, then play. Separate script so it runs even if the rest of the page has a JS error. */
+(function(){
+  var bgContainer = document.getElementById("bgVideoContainer");
+  var flowersWrap = document.querySelector("#flowersVideoContainer .flowers-video-wrap");
+  var flowersContainer = document.getElementById("flowersVideoContainer");
+  if (!bgContainer || !flowersContainer) return;
+
+  function makeVideo(id, className, src){
+    var v = document.createElement("video");
+    v.id = id;
+    if (className) v.className = className;
+    v.setAttribute("muted", "");
+    v.setAttribute("playsinline", "");
+    v.setAttribute("webkit-playsinline", "");
+    v.muted = true;
+    v.playsInline = true;
+    v.autoplay = true;
+    v.loop = true;
+    v.preload = "auto";
+    var s = document.createElement("source");
+    s.src = src;
+    s.type = "video/mp4";
+    v.appendChild(s);
+    return v;
+  }
+
+  var bg = makeVideo("bgVideo", null, "media/bg.mp4");
+  var flowers = makeVideo("flowersVideo", "flowers-video", "media/flowers2.mp4");
+  bgContainer.appendChild(bg);
+  if (flowersWrap) flowersWrap.appendChild(flowers);
+  else flowersContainer.appendChild(flowers);
+
+  function tryPlay(el){ if (el) el.play().catch(function(){}); }
+  function go(){ tryPlay(bg); tryPlay(flowers); }
+
+  go();
+  bg.addEventListener("loadeddata", function(){ tryPlay(bg); }, { once: true });
+  bg.addEventListener("canplay", function(){ tryPlay(bg); }, { once: true });
+  flowers.addEventListener("loadeddata", function(){ tryPlay(flowers); }, { once: true });
+  flowers.addEventListener("canplay", function(){ tryPlay(flowers); }, { once: true });
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", go);
+  else
+    go();
+  requestAnimationFrame(function(){ requestAnimationFrame(go); });
+  document.addEventListener("visibilitychange", function(){ if (!document.hidden) go(); });
+  setTimeout(go, 50);
+  setTimeout(go, 200);
+  setTimeout(go, 600);
+})();
+</script>
+<script>
+/* ============================================================
+   PERFORMANCE PATCHES INCLUDED
+============================================================ */
+
+/* =========================
+   EMAIL PAGES
+========================= */
+const pages = [
+];
+
+let currentPage = 0;
+
+/* =========================
+   TYPEWRITER REVEAL
+========================= */
+const emailBody = document.getElementById("emailContent");
+let typingTimer = 0;
+let typingToken = 0;
+const typedCache = new Map();
+
+(function addCursorCSS(){
+  if (document.getElementById("twCursorCSS")) return;
+  const s = document.createElement("style");
+  s.id = "twCursorCSS";
+  s.textContent = `
+    .tw-cursor{
+      display:inline-block;
+      width:0.7ch;
+      margin-left:0.15ch;
+      color:#9AFF7A;
+      opacity:1;
+      animation: twBlink 1.05s steps(1,end) infinite;
+    }
+    @keyframes twBlink { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+  `;
+  document.head.appendChild(s);
+})();
+
+function stopTyping(){
+  typingToken++;
+  clearTimeout(typingTimer);
+}
+
+function autoScrollToCursor(){
+  emailBody.scrollTop = emailBody.scrollHeight;
+}
+
+function getDelayForChar(ch, prevCh){
+  let d = 52;
+  if (ch === " ") d = 18;
+  if (ch === ",") d = 170;
+  if (ch === "." || ch === "!" || ch === "?") d = 340;
+  if (prevCh === "\n" && ch === "\n") d = 1050;
+  if (ch === "\n") d = 140;
+  d += Math.random() * 22;
+  return d;
+}
+
+function typewriterPage(pageIndex){
+  stopTyping();
+  const myToken = ++typingToken;
+
+  const fullText = pages[pageIndex];
+  const cached = typedCache.get(pageIndex);
+
+  if (cached?.done){
+    emailBody.textContent = fullText;
+    document.getElementById("pageIndicator").textContent = `${pageIndex + 1} / ${pages.length}`;
+    emailBody.scrollTop = 0;
+    return;
+  }
+
+  let i = cached?.i ?? 0;
+  let typedText = cached?.text ?? "";
+
+  emailBody.textContent = typedText;
+
+  const cursor = document.createElement("span");
+  cursor.className = "tw-cursor";
+  cursor.textContent = "▋";
+  emailBody.appendChild(cursor);
+
+  document.getElementById("pageIndicator").textContent = `${pageIndex + 1} / ${pages.length}`;
+  emailBody.scrollTop = 0;
+
+  let last = (typedText.length ? typedText[typedText.length - 1] : "");
+
+  const step = () => {
+    if (myToken !== typingToken) return;
+
+    if (i >= fullText.length){
+      typedCache.set(pageIndex, { i: fullText.length, text: fullText, done: true });
+      typingTimer = setTimeout(() => {
+        if (cursor.parentNode) cursor.remove();
+        autoScrollToCursor();
+      }, 250);
+      return;
+    }
+
+    const burst = (Math.random() < 0.08) ? 2 : 1;
+    let chunk = "";
+
+    for (let k = 0; k < burst && i < fullText.length; k++){
+      const ch = fullText[i];
+      cursor.insertAdjacentText("beforebegin", ch);
+      chunk += ch;
+      last = ch;
+      i++;
+    }
+
+    typedText += chunk;
+    typedCache.set(pageIndex, { i, text: typedText, done: false });
+
+    autoScrollToCursor();
+
+    const nextCh = fullText[i] || "";
+    const delay = getDelayForChar(nextCh, last);
+    typingTimer = setTimeout(step, delay);
+  };
+
+  step();
+}
+
+function renderPage(){ typewriterPage(currentPage); }
+
+/* =========================
+   PASSWORD
+========================= */
+const PASSCODE = "021426";
+let inboxUnlocked = sessionStorage.getItem("inboxUnlocked") === "1";
+let passFails = 0;
+
+const failMessages = [
+  "Нюхай бебру",
+  "Рили?",
+  "😝"
+];
+
+/* =========================
+   FAIL IMAGE DISINTEGRATE
+========================= */
+const GHOST_IMG_SRC = "media/baby.png"; // <-- set your real path
+
+function showGhostDisintegrate(){
+  const wrap = document.getElementById("failGhost");
+  const canvas = document.getElementById("ghostCanvas");
+  if (!wrap || !canvas) return;
+
+  wrap.classList.add("show");
+
+  const cssSize = Math.min(window.innerWidth * 0.80, 520);
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+  canvas.style.width = cssSize + "px";
+  canvas.style.height = cssSize + "px";
+  canvas.width = Math.floor(cssSize * dpr);
+  canvas.height = Math.floor(cssSize * dpr);
+
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssSize, cssSize);
+
+  // Build an absolute URL so relative path mistakes are easier to see in Network tab
+  const url = new URL(GHOST_IMG_SRC, window.location.href).href;
+
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+
+  img.onerror = () => {
+    // Visible fallback = confirms overlay is working, but image path is broken
+    ctx.clearRect(0, 0, cssSize, cssSize);
+    ctx.fillStyle = "rgba(255,0,0,0.15)";
+    ctx.fillRect(0, 0, cssSize, cssSize);
+    ctx.strokeStyle = "rgba(255,90,90,0.9)";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(8, 8, cssSize - 16, cssSize - 16);
+    ctx.fillStyle = "rgba(255,120,120,0.95)";
+    ctx.font = "14px Courier New, monospace";
+    ctx.fillText("IMAGE FAILED TO LOAD", 18, 34);
+    ctx.font = "12px Courier New, monospace";
+    ctx.fillText(GHOST_IMG_SRC, 18, 54);
+    // keep it shown a moment so you can see the error
+    setTimeout(() => wrap.classList.remove("show"), 1200);
+  };
+
+  img.onload = async () => {
+    // decode() avoids “loaded but not ready” on some browsers
+    if (img.decode) {
+      try { await img.decode(); } catch (e) {}
+    }
+
+    // Draw centered, cover
+    const scale = Math.max(cssSize / img.width, cssSize / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    const dx = (cssSize - dw) / 2;
+    const dy = (cssSize - dh) / 2;
+
+    ctx.clearRect(0, 0, cssSize, cssSize);
+    ctx.drawImage(img, dx, dy, dw, dh);
+
+    setTimeout(() => disintegrateCanvas(canvas, wrap, cssSize), 650);
+  };
+
+  img.src = url;
+}
+
+function disintegrateCanvas(canvas, wrap, cssSize){
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+  const w = Math.floor(cssSize);
+  const h = Math.floor(cssSize);
+
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+
+  const parts = [];
+  const step = 4;
+
+  for (let y = 0; y < h; y += step){
+    for (let x = 0; x < w; x += step){
+      const i = (y * w + x) * 4;
+      const a = data[i + 3];
+      if (a < 40) continue;
+      parts.push({
+        x, y,
+        vx: (Math.random() - 0.5) * 5.2,
+        vy: (Math.random() - 0.5) * 5.2 - 1.4,
+        life: 1,
+        decay: 0.012 + Math.random() * 0.02,
+        r: data[i], g: data[i+1], b: data[i+2],
+        a: a / 255
+      });
+    }
+  }
+
+  ctx.clearRect(0, 0, w, h);
+
+  let frame = 0;
+  function tick(){
+    frame++;
+    ctx.clearRect(0, 0, w, h);
+
+    for (let p of parts){
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.05;
+      p.life -= p.decay;
+
+      if (p.life <= 0) continue;
+
+      const alpha = Math.max(0, p.life) * p.a;
+      ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`;
+      const s = 1.2 + (p.life * 0.8);
+      ctx.fillRect(p.x, p.y, s, s);
+    }
+
+    if (frame < 140){
+      requestAnimationFrame(tick);
+    } else {
+      wrap.classList.remove("show");
+      ctx.clearRect(0, 0, w, h);
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+/* =========================
+   EMAIL OPEN / PASS OPEN
+========================= */
+function openEmail(){
+  const env = document.querySelector(".envelope");
+  env.classList.add("open");
+
+  const DURATION_MS = 900;
+  if (openEmail._pending) return;
+  openEmail._pending = true;
+
+  setTimeout(() => {
+    openEmail._pending = false;
+
+    inboxUnlocked = sessionStorage.getItem("inboxUnlocked") === "1";
+    if (inboxUnlocked) {
+      document.getElementById("emailOverlay").style.display = "flex";
+      renderPage();
+    } else {
+      openPass();
+    }
+  }, DURATION_MS + 60);
+}
+
+function openPass(){
+  const passOverlay = document.getElementById("passOverlay");
+  const input = document.getElementById("passInput");
+  const err = document.getElementById("passError");
+
+  err.textContent = "";
+  input.value = "";
+  passOverlay.style.display = "flex";
+
+  requestAnimationFrame(() => input.focus());
+}
+
+function closePass(){
+  document.getElementById("passOverlay").style.display = "none";
+  document.querySelector(".envelope").classList.remove("open");
+}
+
+function submitPass(){
+  const input = document.getElementById("passInput");
+  const err = document.getElementById("passError");
+  const val = (input.value || "").trim();
+
+  if (val !== PASSCODE){
+    passFails++;
+
+    err.textContent = passFails <= 3
+      ? failMessages[passFails - 1]
+      : "Wrong password";
+
+    triggerGlitch();
+
+    if (passFails === 3){
+      showGhostDisintegrate();
+    }
+
+    input.focus();
+    input.select?.();
+    return;
+  }
+
+  unlockSuccessAnim();
+
+  inboxUnlocked = true;
+  sessionStorage.setItem("inboxUnlocked", "1");
+
+  passFails = 0;
+  err.textContent = "";
+  input.value = "";
+
+  document.getElementById("passOverlay").style.display = "none";
+  document.getElementById("emailOverlay").style.display = "flex";
+  renderPage();
+}
+
+function triggerGlitch(){
+  const win = document.getElementById("passWindow");
+  const err = document.getElementById("passError");
+  if (!win) return;
+
+  win.classList.remove("glitch");
+  void win.offsetWidth;
+  win.classList.add("glitch");
+
+  if (err){
+    err.classList.add("glitch-text");
+    setTimeout(() => err.classList.remove("glitch-text"), 420);
+  }
+
+  setTimeout(() => win.classList.remove("glitch"), 420);
+}
+
+function unlockSuccessAnim(){
+  const icon = document.getElementById("lockIcon");
+  if (!icon) return;
+
+  icon.classList.remove("unlock-ok");
+  void icon.offsetWidth;
+  icon.classList.add("unlock-ok");
+  icon.textContent = "🔓";
+}
+
+/* Enter key submits */
+document.addEventListener("keydown", (e) => {
+  const passOverlay = document.getElementById("passOverlay");
+  if (!passOverlay || passOverlay.style.display !== "flex") return;
+
+  if (e.key === "Enter") submitPass();
+  if (e.key === "Escape") closePass();
+});
+
+function closeEmail(){
+  stopTyping();
+  document.querySelector(".envelope").classList.remove("open");
+  document.getElementById("emailOverlay").style.display = "none";
+}
+
+function nextPage(){
+  if (currentPage < pages.length - 1){ currentPage++; renderPage(); }
+}
+function prevPage(){
+  if (currentPage > 0){ currentPage--; renderPage(); }
+}
+
+/* =========================
+   WAVES + PARTICLES (UNCHANGED)
+   ... keep the rest of your original waves + particles code here ...
+========================= */
+
+/* =========================
+   WAVES + PARTICLES
+========================= */
+const playBtn = document.getElementById("playWave");
+const audioEl = document.getElementById("bgAudio");
+const overlay = document.getElementById("waveOverlay");
+const waveCanvas  = document.getElementById("waveCanvas");
+const waveCtx     = waveCanvas.getContext("2d", { alpha: true });
+
+const flowersSection = document.querySelector(".flowers-section");
+const flowersVideo   = document.querySelector(".flowers-video");
+const envelopeEl     = document.querySelector(".envelope");
+
+let audioCtx = null;
+let analyser = null;
+let srcNode  = null;
+let timeData = null;
+let freqData = null;
+
+let started = false;
+let rafId = 0;
+let posRaf = 0;
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp  = (a, b, t) => a + (b - a) * t;
+
+function waveThickness(){
+  return window.matchMedia("(max-width: 600px)").matches ? 1.0 : 1.25;
+}
+
+function getDPR(){
+  const isMobile = window.matchMedia("(max-width: 600px)").matches;
+  return Math.min(isMobile ? 1.2 : 1.5, window.devicePixelRatio || 1);
+}
+
+const fxCanvas = document.createElement("canvas");
+fxCanvas.id = "fxCanvas";
+Object.assign(fxCanvas.style, {
+  position: "fixed",
+  inset: "0",
+  width: "100vw",
+  height: "100vh",
+  zIndex: "5",
+  pointerEvents: "none"
+});
+document.body.appendChild(fxCanvas);
+
+const fxCtx = fxCanvas.getContext("2d", { alpha: true });
+
+function resizeFxCanvas(){
+  const dpr = getDPR();
+  fxCanvas.width = Math.floor(innerWidth * dpr);
+  fxCanvas.height = Math.floor(innerHeight * dpr);
+  fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function resizeWaveCanvas(){
+  const rect = waveCanvas.getBoundingClientRect();
+  const dpr = getDPR();
+  const w = Math.max(1, Math.floor(rect.width  * dpr));
+  const h = Math.max(1, Math.floor(rect.height * dpr));
+  if (waveCanvas.width !== w || waveCanvas.height !== h){
+    waveCanvas.width = w;
+    waveCanvas.height = h;
+  }
+  waveCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function updateWavePosition(){
+  if (!flowersSection || !envelopeEl) return;
+
+  const f = flowersSection.getBoundingClientRect();
+  const e = envelopeEl.getBoundingClientRect();
+
+  let y = (f.bottom + e.top) / 2;
+  y -= Math.min(28, innerHeight * 0.035);
+
+  const overlayH = overlay?.getBoundingClientRect().height || 120;
+  y -= overlayH / 2;
+
+  const pad = Math.max(48, Math.min(96, innerHeight * 0.08));
+  y = clamp(y, pad, innerHeight - pad);
+
+  document.documentElement.style.setProperty("--wave-y", `${y}px`);
+}
+
+function scheduleLayoutUpdate(){
+  if (posRaf) return;
+  posRaf = requestAnimationFrame(() => {
+    posRaf = 0;
+    updateWavePosition();
+    resizeWaveCanvas();
+    resizeFxCanvas();
+  });
+}
+
+window.addEventListener("resize", scheduleLayoutUpdate, { passive: true });
+window.addEventListener("scroll", scheduleLayoutUpdate, { passive: true });
+
+if (window.visualViewport){
+  visualViewport.addEventListener("resize", scheduleLayoutUpdate, { passive: true });
+  visualViewport.addEventListener("scroll", scheduleLayoutUpdate, { passive: true });
+}
+
+const ro = new ResizeObserver(() => scheduleLayoutUpdate());
+if (flowersSection) ro.observe(flowersSection);
+if (envelopeEl) ro.observe(envelopeEl);
+
+scheduleLayoutUpdate();
+setTimeout(scheduleLayoutUpdate, 150);
+setTimeout(scheduleLayoutUpdate, 650);
+
+function setupAnalyser(){
+  if (audioCtx) return;
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.82;
+
+  timeData = new Uint8Array(analyser.frequencyBinCount);
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+
+  srcNode = audioCtx.createMediaElementSource(audioEl);
+  srcNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+
+let rmsSmooth = 0;
+let trebleSmooth = 0;
+
+function readAudio(){
+  analyser.getByteTimeDomainData(timeData);
+  analyser.getByteFrequencyData(freqData);
+
+  let sum = 0;
+  for (let i = 0; i < timeData.length; i++){
+    const v = (timeData[i] - 128) / 128;
+    sum += v * v;
+  }
+  const rms = Math.sqrt(sum / timeData.length);
+  rmsSmooth = lerp(rmsSmooth, rms, 0.09);
+
+  let hi = 0;
+  const start = Math.floor(freqData.length * 0.35);
+  for (let i = start; i < freqData.length; i++) hi += freqData[i];
+  const hiNorm = hi / ((freqData.length - start) * 255);
+  trebleSmooth = lerp(trebleSmooth, clamp(hiNorm, 0, 1), 0.12);
+
+  return { level: rmsSmooth, treble: trebleSmooth };
+}
+
+const particles = [];
+const MAX_PARTICLES = 220;
+
+function rand(a, b){ return a + Math.random() * (b - a); }
+
+let fxRaf = 0;
+function ensureFxLoop(){
+  if (fxRaf) return;
+  const tick = () => {
+    if (particles.length === 0){
+      fxRaf = 0;
+      return;
+    }
+    drawParticles();
+    fxRaf = requestAnimationFrame(tick);
+  };
+  fxRaf = requestAnimationFrame(tick);
+}
+
+function clampParticles(){
+  while (particles.length > MAX_PARTICLES) particles.shift();
+}
+
+function spawnFlowerOrbs(vx, vy){
+  const isMobile = window.matchMedia("(max-width: 600px)").matches;
+  const count = isMobile ? 8 : 14;
+
+  for (let i = 0; i < count; i++){
+    const angle = rand(-Math.PI * 0.80, -Math.PI * 0.20);
+    const speed = rand(0.9, 2.4);
+    particles.push({
+      x: vx, y: vy,
+      vx: Math.cos(angle) * speed + rand(-0.22, 0.22),
+      vy: Math.sin(angle) * speed + rand(-0.16, 0.10),
+      life: 1,
+      r: rand(0.9, 1.7),
+      w: rand(1.3, 2.6),
+      ph: rand(0, Math.PI * 2),
+      type: "orb"
+    });
+  }
+
+  clampParticles();
+  ensureFxLoop();
+}
+
+function spawnCyanBurst(vx, vy){
+  const isMobile = window.matchMedia("(max-width: 600px)").matches;
+  const count = isMobile ? 8 : 12;
+
+  for (let i = 0; i < count; i++){
+    const angle = rand(0, Math.PI * 2);
+    const speed = rand(0.7, 1.8);
+    particles.push({
+      x: vx, y: vy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      r: rand(1.6, 3.0),
+      type: "cyan"
+    });
+  }
+
+  clampParticles();
+  ensureFxLoop();
+}
+
+function drawParticles(){
+  if (particles.length === 0) return;
+
+  fxCtx.clearRect(0, 0, innerWidth, innerHeight);
+
+  for (let i = particles.length - 1; i >= 0; i--){
+    const p = particles[i];
+
+    p.x += p.vx;
+    p.y += p.vy;
+
+    p.vx *= 0.989;
+    p.vy *= 0.988;
+    p.vy -= (p.type === "orb" ? 0.0062 : 0.0028);
+
+    if (p.type === "orb"){
+      const t = performance.now() * 0.001;
+      p.x += Math.sin(t * p.w + p.ph) * 0.26;
+    }
+
+    p.life -= (p.type === "orb" ? 0.012 : 0.016);
+
+    if (p.life <= 0){
+      particles.splice(i, 1);
+      continue;
+    }
+
+    fxCtx.save();
+    fxCtx.globalCompositeOperation = "lighter";
+    fxCtx.globalAlpha = p.life;
+
+    if (p.type === "cyan"){
+      fxCtx.fillStyle = "rgba(120,255,255,0.66)";
+      fxCtx.shadowColor = "rgba(120,255,255,0.30)";
+      fxCtx.shadowBlur = 10;
+      fxCtx.beginPath();
+      fxCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      fxCtx.fill();
+      fxCtx.restore();
+      continue;
+    }
+
+    const core = p.r;
+    const aura = p.r * 6.3;
+
+    fxCtx.fillStyle = "rgba(255,140,210,0.10)";
+    fxCtx.shadowColor = "rgba(255,140,210,0.22)";
+    fxCtx.shadowBlur = 18;
+    fxCtx.beginPath();
+    fxCtx.arc(p.x, p.y, aura, 0, Math.PI * 2);
+    fxCtx.fill();
+
+    fxCtx.shadowBlur = 12;
+    fxCtx.fillStyle = "rgba(255,195,235,0.42)";
+    fxCtx.beginPath();
+    fxCtx.arc(p.x, p.y, core, 0, Math.PI * 2);
+    fxCtx.fill();
+
+    fxCtx.restore();
+  }
+}
+
+let lastFlower = 0;
+
+function pointInShrunkRect(x, y, r, shrinkX = 0.18, shrinkTop = 0.10, shrinkBottom = 0.22){
+  const left   = r.left + r.width  * shrinkX;
+  const right  = r.right - r.width * shrinkX;
+  const top    = r.top + r.height  * shrinkTop;
+  const bottom = r.bottom - r.height * shrinkBottom;
+  return (x >= left && x <= right && y >= top && y <= bottom);
+}
+
+document.addEventListener("click", (e) => {
+  if (!flowersVideo) return;
+  if (e.target.closest(".envelope") || e.target.closest(".email-overlay")) return;
+
+  const r = flowersVideo.getBoundingClientRect();
+  const inside = pointInShrunkRect(e.clientX, e.clientY, r, 0.28, 0.16, 0.44);
+  if (!inside) return;
+
+  const now = Date.now();
+  const extraDelay = particles.length > 140 ? 220 : 0;
+  const minGap = 140 + extraDelay;
+
+  if (now - lastFlower < minGap) return;
+  lastFlower = now;
+
+  spawnFlowerOrbs(e.clientX, e.clientY);
+}, { passive: true });
+
+function showPlayButton(){ playBtn.classList.remove("hidden"); }
+function hidePlayButton(){ playBtn.classList.add("hidden"); }
+
+function stopWaves(){
+  started = false;
+  overlay.classList.remove("active");
+
+  const w = waveCanvas.clientWidth;
+  const h = waveCanvas.clientHeight;
+  waveCtx.clearRect(0, 0, w, h);
+}
+
+audioEl.addEventListener("ended", () => { stopWaves(); showPlayButton(); });
+audioEl.addEventListener("pause", () => { stopWaves(); showPlayButton(); });
+
+function dissolvePlayButton(){
+  const r = playBtn.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2 - 28;
+  spawnCyanBurst(cx, cy);
+  hidePlayButton();
+}
+
+function strokeNeonBlue(drawPath, thickness = 1, glow = 1){
+  waveCtx.save();
+  waveCtx.globalCompositeOperation = "lighter";
+  waveCtx.lineCap = "round";
+
+  waveCtx.shadowColor = "rgba(90,245,255,0.08)";
+  waveCtx.shadowBlur  = 11 * glow;
+  waveCtx.lineWidth   = 3.4 * thickness;
+  waveCtx.strokeStyle = "rgba(90,245,255,0.07)";
+  drawPath(); waveCtx.stroke();
+
+  waveCtx.shadowColor = "rgba(90,245,255,0.20)";
+  waveCtx.shadowBlur  = 6.5 * glow;
+  waveCtx.lineWidth   = 2.1 * thickness;
+  waveCtx.strokeStyle = "rgba(90,245,255,0.18)";
+  drawPath(); waveCtx.stroke();
+
+  waveCtx.shadowBlur  = 0;
+  waveCtx.lineWidth   = 1.05 * thickness;
+  waveCtx.strokeStyle = "rgba(120,255,255,0.82)";
+  drawPath(); waveCtx.stroke();
+
+  waveCtx.restore();
+}
+
+function envelopeShape(u){ return Math.pow(Math.sin(Math.PI * u), 1.45); }
+function fbm(u, t, s = 1){
+  return (
+    Math.sin((u * 10.0 * s) + t * 1.3) * 0.55 +
+    Math.sin((u * 23.0 * s) - t * 2.2) * 0.28 +
+    Math.sin((u * 52.0 * s) + t * 3.7) * 0.17
+  );
+}
+function travelingPulse(u, t, speed = 0.18, width = 0.06){
+  const p = (t * speed) % 1;
+  const d = Math.min(Math.abs(u - p), 1 - Math.abs(u - p));
+  return Math.exp(-(d * d) / (width * width));
+}
+
+function startLoop(){
+  if (rafId) return;
+
+  const loop = (now) => {
+    rafId = requestAnimationFrame(loop);
+    if (!started) return;
+
+    const { level, treble } = readAudio();
+
+    const w = waveCanvas.clientWidth;
+    const h = waveCanvas.clientHeight;
+    waveCtx.clearRect(0, 0, w, h);
+
+    const t = now / 1000;
+    const thickMul = waveThickness();
+
+    const baseAmp = 6;
+    const maxAmp  = 90;
+    const ampPx   = baseAmp + maxAmp * Math.pow(level, 0.80);
+
+    const electric = 0.35 + 0.95 * treble;
+    const centerY = h * 0.5;
+
+    const points = Math.max(160, Math.floor(w / 5));
+    const dx = w / (points - 1);
+
+    waveCtx.save();
+    waveCtx.globalCompositeOperation = "lighter";
+    waveCtx.globalAlpha = 0.07 + 0.22 * level;
+    waveCtx.fillStyle = "rgba(90,245,255,0.16)";
+    waveCtx.fillRect(0, centerY - 1, w, 2);
+    waveCtx.restore();
+
+    const disp = new Array(points);
+    for (let i = 0; i < points; i++){
+      const u = i / (points - 1);
+      const idx = Math.floor(u * (timeData.length - 1));
+      const a = (timeData[idx] - 128) / 128;
+
+      const pulse1 = travelingPulse(u, t, 0.20, 0.055);
+      const pulse2 = travelingPulse(u, t + 2.1, 0.14, 0.08);
+
+      const wobble = fbm(u, t * electric, 1.0) * 0.55;
+      const micro  = Math.sin(t * (12.0 * electric) + u * (140 * electric)) * 0.12;
+
+      const env = envelopeShape(u);
+
+      disp[i] =
+        env * (
+          ampPx * (a * (0.62 + 0.55 * level)) +
+          (18 + 38 * level) * wobble +
+          (10 + 30 * treble) * micro +
+          (55 * pulse1 * (0.20 + level)) +
+          (32 * pulse2 * (0.15 + level * 0.8))
+        );
+    }
+
+    function lensPair(phase, alpha, thickness, glow){
+      waveCtx.save();
+      waveCtx.globalAlpha = alpha;
+
+      const phaseWarp = (u) =>
+        Math.sin(u * 14 + t * (1.1 + phase)) * (1.5 + 3.0 * treble);
+
+      const upperPath = () => {
+        waveCtx.beginPath();
+        for (let i = 0; i < points; i++){
+          const u = i / (points - 1);
+          const x = i * dx;
+          const y = centerY - (disp[i] + phaseWarp(u));
+          if (i === 0) waveCtx.moveTo(x, y);
+          else waveCtx.lineTo(x, y);
+        }
+      };
+
+      const lowerPath = () => {
+        waveCtx.beginPath();
+        for (let i = 0; i < points; i++){
+          const u = i / (points - 1);
+          const x = i * dx;
+          const y = centerY + (disp[i] - phaseWarp(u) * 0.6);
+          if (i === 0) waveCtx.moveTo(x, y);
+          else waveCtx.lineTo(x, y);
+        }
+      };
+
+      const glowBoost = 0.72 + 0.85 * level + 0.55 * treble;
+
+      strokeNeonBlue(upperPath, thickness * thickMul, glowBoost * glow);
+      strokeNeonBlue(lowerPath, thickness * thickMul, glowBoost * glow);
+
+      waveCtx.restore();
+    }
+
+    lensPair(0.0, 0.90, 1.08, 1.0);
+    lensPair(1.1, 0.55, 0.95, 0.85);
+    lensPair(2.2, 0.35, 0.82, 0.75);
+  };
+
+  rafId = requestAnimationFrame(loop);
+}
+
+playBtn.addEventListener("click", async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  setupAnalyser();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+
+  audioEl.muted = false;
+  audioEl.volume = 0.35;
+
+  if (audioEl.paused) await audioEl.play();
+
+  started = true;
+  overlay.classList.add("active");
+
+  dissolvePlayButton();
+
+  scheduleLayoutUpdate();
+  startLoop();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden){
+    stopWaves();
+    if (fxRaf){ cancelAnimationFrame(fxRaf); fxRaf = 0; }
+  } else {
+    if (!audioEl.paused) {
+      started = true;
+      overlay.classList.add("active");
+    }
+    if (particles.length) ensureFxLoop();
+  }
+});
+</script>
+
+<!-- CRT overlay stays as-is; your CSS controls intensity/curvature -->
+<div class="crt-wrap" aria-hidden="true">
+  <div class="crt"></div>
+</div>
+
+</body>
+</html>
+
+
+

@@ -1,0 +1,691 @@
+/* =========================
+   RESET
+========================= */
+*{ margin:0; padding:0; box-sizing:border-box; }
+
+/* Prevent horizontal scroll on mobile */
+html, body{
+  width:100%;
+  max-width:100vw;
+  overflow-x:hidden;
+}
+/* =========================
+   BODY
+========================= */
+body{
+  font-family:"Courier New", monospace;
+  background:black;
+  color:#00ff88;
+  min-height:100vh;
+}
+
+/* =========================
+   FULL BACKGROUND VIDEO
+========================= */
+.bg-video{
+  position:fixed;
+  inset:0;
+  z-index:-2;
+  pointer-events:none;
+  overflow:hidden;
+}
+.bg-video video{
+  filter: brightness(1.50) contrast(1.05) saturate(1.1);
+  opacity:0.9;
+}
+
+/* Hide iOS Safari native play overlay; no controls chrome on muted inline videos */
+.bg-video video,
+.flowers-video{
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: none;
+}
+.flowers-video::-webkit-media-controls,
+.flowers-video::-webkit-media-controls-enclosure,
+.flowers-video::-webkit-media-controls-panel,
+.flowers-video::-webkit-media-controls-start-playback-button,
+.flowers-video::-webkit-media-controls-overlay-play-button,
+.bg-video video::-webkit-media-controls-start-playback-button,
+.bg-video video::-webkit-media-controls-overlay-play-button{
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  -webkit-appearance: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  visibility: hidden !important;
+}
+
+/* =========================
+   FLOWERS
+========================= */
+.flowers-section{
+  min-height:60vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  pointer-events:none;
+}
+.flowers-video-wrap{
+  position:relative;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  width:min(70vw, 900px);
+}
+.flowers-video-wrap::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  background:transparent;
+}
+.flowers-video{
+  width:100%;
+  max-width:min(70vw, 900px);
+  display:block;
+  mix-blend-mode:screen;
+  opacity:0.9;
+  filter:saturate(2.5) contrast(1.10) brightness(1.08);
+}
+
+/* =========================
+   WAVES + PLAY
+========================= */
+:root{
+  --wave-y: 52vh;
+  --wave-h: clamp(72px, 12vh, 140px);
+  --play-size: clamp(42px, 6vw, 54px);
+  --wave-lift: 20px;
+}
+
+.wave-overlay{
+  position:fixed;
+  left:0; right:0;
+  top:var(--wave-y);
+  transform:translateY(-50%);
+  height:var(--wave-h);
+  z-index:1;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity .35s ease;
+}
+.wave-overlay.active{ opacity:1; }
+
+#waveCanvas{
+  width:100%;
+  height:100%;
+  display:block;
+}
+
+.wave-play{
+  position:fixed;
+  left:50%;
+  top:var(--wave-y);
+  transform:translate(-50%, calc(-50% + 16px));
+  z-index:1;
+  width:var(--play-size, 44px);
+  height:var(--play-size, 44px);
+  border-radius:50%;
+  background: rgba(60,220,255,0.18);
+  border: 1px solid rgba(70,235,255,1);
+  color: rgba(70,235,255,1);
+  font-size:18px;
+  cursor:pointer;
+  box-shadow:0 0 2px rgba(70,235,255,0.08),
+    0 0 22px rgba(70,235,255,0.35),
+    0 0 8px rgba(70,235,255,0.65),
+    0 0 8px rgba(70,235,255,0.1),
+    inset 0 0 2px rgba(70,235,255,0.06);
+  transition:transform .25s ease, opacity .25s ease;
+  will-change: transform, opacity; /* ✅ smoother on mobile */
+}
+
+.wave-play.hidden{
+  opacity:0;
+  pointer-events:none;
+}
+
+/* =========================
+   ENVELOPE
+========================= */
+.envelope-section{
+  height:40vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  position:relative;
+  z-index:3;
+}
+
+.envelope{
+  position:relative;
+  width:340px;
+  height:220px;
+  cursor:pointer;
+  perspective:1200px;
+  will-change: transform; /* ✅ reduces flap jank */
+}
+
+/* Envelope back */
+.envelope-back{
+  position:absolute;
+  inset:0;
+  background:rgba(0, 255, 120, 0.04);
+  border:1px solid #00ff88;
+}
+
+/* Flap */
+.envelope-flap{
+  position:absolute;
+  top:0; left:0;
+  width:100%;
+  height:50%;
+  clip-path:polygon(0% 0%, 100% 0%, 50% 100%);
+  background:
+    linear-gradient(135deg, transparent 48.8%, rgba(0,255,136,0.55) 50%, transparent 51.2%),
+    linear-gradient(225deg, transparent 48.8%, rgba(0,255,136,0.55) 50%, transparent 51.2%),
+    rgba(0, 255, 136, 0.20);
+
+  transform-origin:top center;
+  transition:transform 0.9s ease;
+
+  box-shadow:
+    0 0 6px rgba(0, 255, 136, 0.45),
+    0 0 18px rgba(0, 255, 136, 0.28),
+    inset 0 -6px 10px rgba(0, 255, 136, 0.22);
+
+  filter: drop-shadow(0 0 4px rgba(0,255,136,.45))
+          drop-shadow(0 0 10px rgba(0,255,136,.25));
+
+  z-index:2;
+  will-change: transform; /* ✅ smoother */
+}
+
+/* Inbox label */
+.inbox-label{
+  position:absolute;
+  top:72%;
+  left:50%;
+  transform:translate(-50%, -50%);
+  font-size:14px;
+  letter-spacing:3px;
+  color:#00ff88;
+  text-shadow:0 0 6px rgba(124, 255, 107, 0.8);
+  z-index:3;
+}
+
+.envelope.open .envelope-flap{
+  transform:rotateX(-180deg);
+}
+
+/* =========================
+   EMAIL OVERLAY
+========================= */
+.email-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0, 0, 0, 0.45);
+  display:none;
+  justify-content:center;
+  align-items:center;
+  z-index:20;
+}
+
+.email-window{
+  width:min(92vw, 900px);
+  max-height:min(70vh, 620px);
+  background:rgba(10, 25, 10, 0.9);
+  border:1px solid #7CFF6B;
+  box-shadow:0 0 22px rgba(124, 255, 107, 0.25), 0 0 60px rgba(124, 255, 107, 0.08);
+  display:flex;
+  flex-direction:column;
+  position:relative;
+  transform: translateZ(0); /* ✅ helps iOS compositing */
+}
+
+.email-body{
+  padding:18px 22px;
+  font-size:15px;
+  line-height:1.6;
+  white-space:pre-wrap;
+  flex:1;
+  overflow-y:auto;
+  color:#7CFF6B;
+
+  /* ✅ smoother scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+.email-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 16px;
+  background:rgba(124, 255, 107, 0.08);
+  border-bottom:1px solid rgba(124, 255, 107, 0.35);
+  font-size:14px;
+}
+
+.email-title{
+  color:#7AFF6A;
+  letter-spacing:1px;
+  text-shadow:0 0 6px rgba(122, 255, 106, 0.8), 0 0 12px rgba(122, 255, 106, 0.25);
+}
+
+.email-close{
+  background:none;
+  border:none;
+  color:#7AFF6A;
+  font-size:18px;
+  line-height:1;
+  cursor:pointer;
+  padding:2px 6px;
+}
+.email-close:hover{ color:#B6FF9A; }
+
+.email-footer{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  padding:10px 16px;
+  border-top:1px solid rgba(124, 255, 107, 0.35);
+  background:rgba(124, 255, 107, 0.06);
+}
+
+.email-footer button{
+  background:transparent;
+  border:1px solid #7CFF6B;
+  color:#7CFF6B;
+  padding:4px 10px;
+  font-family:inherit;
+  font-size:13px;
+  cursor:pointer;
+  box-shadow:0 0 8px rgba(124, 255, 107, 0.2);
+}
+.email-footer button:hover{ background:rgba(124, 255, 107, 0.15); }
+
+/* =========================
+   PASSWORD OVERLAY (styled like inbox)
+========================= */
+.pass-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 25; /* above email overlay */
+}
+
+.pass-window{
+  width: min(92vw, 640px);
+  max-height: min(60vh, 520px);
+  background: rgba(10, 25, 10, 0.9);
+  border: 1px solid #7CFF6B;
+  box-shadow:
+    0 0 22px rgba(124, 255, 107, 0.25),
+    0 0 60px rgba(124, 255, 107, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.pass-body{
+  padding: 18px 22px;
+  display: grid;
+  gap: 12px;
+}
+
+.pass-label{
+  color: #7CFF6B;
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(124,255,107,0.18);
+}
+
+.pass-input{
+  width: 100%;
+  padding: 12px 12px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(124, 255, 107, 0.55);
+  color: #9AFF7A;
+  font-family: inherit;
+  font-size: 16px;
+  outline: none;
+  box-shadow: inset 0 0 10px rgba(124,255,107,0.10);
+}
+
+.pass-input:focus{
+  border-color: rgba(154, 255, 122, 0.9);
+  box-shadow:
+    inset 0 0 10px rgba(124,255,107,0.12),
+    0 0 14px rgba(124,255,107,0.12);
+}
+
+.pass-error{
+  min-height: 18px;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  color: #ff6969;
+  opacity: 0.95;
+}
+
+/* =========================
+   PASSWORD LOCK ICON
+========================= */
+.lock-icon{
+  display:inline-block;
+  margin-right: 8px;
+  transform-origin: 50% 60%;
+  filter: drop-shadow(0 0 6px rgba(120,255,255,.18));
+}
+
+/* success: unlock “pop” + slight spin */
+.lock-icon.unlock-ok{
+  animation: unlockPop .55s ease-out forwards;
+}
+
+@keyframes unlockPop{
+  0%   { transform: scale(1) rotate(0deg);   opacity: 1; }
+  35%  { transform: scale(1.25) rotate(-12deg); }
+  70%  { transform: scale(1.10) rotate(8deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+/* =========================
+   GLITCH (after 3 fails)
+========================= */
+.pass-window.glitch{
+  animation: glitchJitter .38s steps(2,end);
+}
+
+@keyframes glitchJitter{
+  0%   { transform: translate(0,0); filter:none; }
+  15%  { transform: translate(-2px,1px) skewX(1deg); filter: hue-rotate(18deg) contrast(1.15); }
+  35%  { transform: translate(3px,-2px) skewY(-1deg); filter: saturate(1.2) contrast(1.2); }
+  60%  { transform: translate(-3px,2px); filter: hue-rotate(-14deg) contrast(1.15); }
+  100% { transform: translate(0,0); filter:none; }
+}
+
+/* optional: RGB split feel on the error text during glitch */
+#passError.glitch-text{
+  text-shadow:
+    -1px 0 rgba(255,60,120,.55),
+     1px 0 rgba(90,245,255,.55);
+}
+
+
+#pageIndicator{
+  justify-self:center;
+  color:#9AFF7A;
+  font-size:13px;
+  letter-spacing:1px;
+}
+
+/* =========================
+   CRT + CURVATURE OVERLAY
+   (more curvature + less GPU cost)
+========================= */
+.crt-wrap{
+  position:fixed;
+  inset:0;
+  z-index:999999;
+  pointer-events:none;
+
+  /* ✅ stronger "screen bulge" */
+  transform: perspective(520px) translateZ(0) scale(1.055)
+             rotateX(1.75deg) rotateY(-1.75deg);
+
+  /* ✅ slightly rounder corners */
+  border-radius: 34px;
+
+  /* ✅ softer edge falloff */
+  -webkit-mask-image: radial-gradient(ellipse at center,
+    rgba(0,0,0,1) 54%,
+    rgba(0,0,0,0.62) 76%,
+    rgba(0,0,0,0) 100%
+  );
+  mask-image: radial-gradient(ellipse at center,
+    rgba(0,0,0,1) 54%,
+    rgba(0,0,0,0.62) 76%,
+    rgba(0,0,0,0) 100%
+  );
+
+  overflow:hidden;
+
+  /* ✅ keep it on its own layer */
+  will-change: transform;
+  transform-style: preserve-3d;
+}
+
+/* scanlines + noise + chroma */
+.crt{
+  position:absolute;
+  inset:-3%;
+  opacity:0.52; /* slightly lower = less banding on mobile */
+  filter: contrast(1.05) brightness(1.02);
+}
+
+.crt{
+  background:
+    radial-gradient(circle at center,
+      rgba(0,0,0,0) 54%,
+      rgba(0,0,0,0.30) 100%
+    ),
+    repeating-linear-gradient(to bottom,
+      rgba(0,0,0,0.28) 0px,
+      rgba(0,0,0,0.28) 1px,
+      rgba(0,0,0,0.06) 2px,
+      rgba(0,0,0,0.06) 4px
+    ),
+    repeating-linear-gradient(to right,
+      rgba(255,255,255,0.03) 0px,
+      rgba(255,255,255,0.03) 1px,
+      rgba(0,0,0,0.00) 3px,
+      rgba(0,0,0,0.00) 7px
+    );
+}
+/* =========================
+   FAIL IMAGE DISINTEGRATE
+========================= */
+.fail-ghost{
+  position:fixed;
+  inset:0;
+  display:none;
+  place-items:center;
+
+  /* ABOVE CRT (your CRT is z-index:999999) */
+  z-index: 1000001;
+
+  pointer-events:none;
+  
+
+  opacity:0;
+  transition:opacity .12s ease;
+}
+
+.fail-ghost.show{
+  display:grid;
+  opacity:1;
+}
+
+@keyframes ghostPop{
+  from{ transform:scale(.88); }
+  to{ transform:scale(1); }
+}
+
+background:radial-gradient(circle at center,
+    rgba(0,0,0,0.15) 0%,
+    rgba(0,0,0,0.60) 60%,
+    rgba(0,0,0,0.85) 100%
+  );
+
+/* noise + flicker */
+.crt::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255,255,255,0.02) 0px,
+    rgba(255,255,255,0.02) 1px,
+    rgba(0,0,0,0.00) 2px,
+    rgba(0,0,0,0.00) 6px
+  );
+  opacity:0.16;
+  animation: crtFlicker 4.2s infinite;
+}
+
+/* RGB split */
+.crt::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background: linear-gradient(to right,
+    rgba(255,0,90,0.10),
+    rgba(0,255,255,0.10)
+  );
+  mix-blend-mode: overlay;
+  opacity:0.20;
+  transform: translateX(0.8px);
+}
+
+/* flicker band */
+@keyframes crtFlicker{
+  0%{opacity:.10; transform:translateY(-2%);}
+  5%{opacity:.20;}
+  12%{opacity:.12;}
+  22%{opacity:.24;}
+  45%{opacity:.14;}
+  58%{opacity:.26;}
+  72%{opacity:.12;}
+  100%{opacity:.18; transform:translateY(2%);}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .crt::before{ animation:none; }
+}
+
+/* =========================
+   TABLET FIX
+========================= */
+@media (min-width: 801px) and (max-width: 1024px){
+  .wave-overlay{ transform: translateY(calc(-50% - 36px)); }
+  .wave-play{ transform: translate(-50%, calc(-50% - 32px + 16px)); }
+  .envelope-section{ margin-top: 4vh; }
+}
+
+/* =========================
+   MOBILE
+========================= */
+@media (max-width: 600px){
+  .crt{ opacity:0.40; }
+
+  /* ✅ stronger curvature on mobile */
+  .crt-wrap{
+    transform: perspective(560px) translateZ(0) scale(1.045)
+               rotateX(1.25deg) rotateY(-1.25deg);
+    border-radius: 22px;
+  }
+
+  .wave-overlay{ height:110px; }
+  .wave-play{ transform: translate(-50%, calc(-50% + 5px)); }
+
+  .flowers-section{ height:62vh; }
+  .flowers-video{ width:140vw; max-width:none; }
+
+  .envelope-section{
+    height:28vh;
+    margin-top:-6vh;
+    display:flex;
+    align-items:center;
+  }
+  .envelope{ width:260px; height:170px; }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
