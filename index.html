@@ -103,6 +103,7 @@
   </div>
 
 <script>
+/* iOS: create videos in JS with muted/playsInline set before load, then play. Separate script so it runs even if the rest of the page has a JS error. */
 (function(){
   var bgContainer = document.getElementById("bgVideoContainer");
   var flowersWrap = document.querySelector("#flowersVideoContainer .flowers-video-wrap");
@@ -154,23 +155,14 @@
 })();
 </script>
 <script>
+/* ============================================================
+   PERFORMANCE PATCHES INCLUDED
+============================================================ */
 
 /* =========================
    EMAIL PAGES
 ========================= */
 const pages = [
-'‘Hope’ is the thing with feathers –
-That perches in the soul –
-And sings the tune without the words –
-And never stops – at all –',
-'And sweetest – in the Gale – is heard –
-And sore must be the storm –
-That could abash the little Bird
-That kept so many warm –',
-'I’ve heard it in the chillest land –
-And on the strangest Sea –
-Yet – never – in Extremity,
-It asked a crumb – of me.'
 ];
 
 let currentPage = 0;
@@ -557,6 +549,11 @@ function nextPage(){
 function prevPage(){
   if (currentPage > 0){ currentPage--; renderPage(); }
 }
+
+/* =========================
+   WAVES + PARTICLES (UNCHANGED)
+   ... keep the rest of your original waves + particles code here ...
+========================= */
 
 /* =========================
    WAVES + PARTICLES
@@ -1073,6 +1070,8 @@ document.addEventListener("visibilitychange", () => {
 
 </body>
 </html>
+
+
 
 
 
